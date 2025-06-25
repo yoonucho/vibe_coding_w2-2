@@ -4,6 +4,10 @@ on:
   issues:
     types: [opened]
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   assign-issue:
     runs-on: ubuntu-latest
@@ -17,15 +21,15 @@ jobs:
             const title = issue.title.toLowerCase();
             const body = (issue.body || '').toLowerCase();
 
-                      // 팀원 및 전문가 정의
-          const teamMembers = {
-            backend: ['yoonucho'],
-            frontend: ['yoonucho'],
-            fullstack: ['yoonucho'],
-            docs: ['yoonucho'],
-            devops: ['yoonucho'],
-            maintenance: ['yoonucho']
-          };
+            // 팀원 및 전문가 정의
+            const teamMembers = {
+              backend: ['yoonucho'],
+              frontend: ['yoonucho'],
+              fullstack: ['yoonucho'],
+              docs: ['yoonucho'],
+              devops: ['yoonucho'],
+              maintenance: ['yoonucho']
+            };
 
             // 이슈 타입 및 컴포넌트 감지
             let assigneeCategory = 'maintenance'; // 기본값
