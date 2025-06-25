@@ -1,10 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import chat
-from .config import get_settings
-
-# 설정 로드
-settings = get_settings()
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -18,7 +14,7 @@ app = FastAPI(
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=["*"],  # 간단하게 모든 origin 허용
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,12 +49,17 @@ async def health_check():
 @app.get("/api/v1/test")
 async def test_endpoint():
     """
-    테스트용 새 엔드포인트 - PR 테스트를 위해 추가
+    테스트용 새 엔드포인트
+    🐛 의도적 버그: 0으로 나누기 오류 (ZeroDivisionError)
     """
+    # 🐛 BUG: 0으로 나누기 오류 발생
+    calculation_result = 100 / 0  # ZeroDivisionError 발생
+    
     return {
-        "message": "PR 테스트용 엔드포인트",
+        "message": "PR 테스트용 엔드포인트", 
         "feature": "새로운 기능 테스트",
-        "status": "success"
+        "status": "success",
+        "calculation": calculation_result
     }
 
 # 애플리케이션 시작 시 실행
