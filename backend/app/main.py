@@ -47,20 +47,43 @@ async def health_check():
     }
 
 @app.get("/api/v1/test")
-async def test_endpoint():
+async def test_endpoint(divisor: int = 2):
     """
-    테스트용 새 엔드포인트
-    🐛 의도적 버그: 0으로 나누기 오류 (ZeroDivisionError)
+    테스트용 새 엔드포인트 - 수정된 안전한 버전
+    ✅ 버그 수정: ZeroDivisionError 해결
+    - 0으로 나누기 방지 로직 추가
+    - 에러 핸들링 구현
+    - 파라미터 검증 추가
     """
-    # 🐛 BUG: 0으로 나누기 오류 발생
-    calculation_result = 100 / 0  # ZeroDivisionError 발생
-    
-    return {
-        "message": "PR 테스트용 엔드포인트", 
-        "feature": "새로운 기능 테스트",
-        "status": "success",
-        "calculation": calculation_result
-    }
+    try:
+        # 0으로 나누기 방지
+        if divisor == 0:
+            raise HTTPException(
+                status_code=400, 
+                detail="나누는 수는 0이 될 수 없습니다. divisor 파라미터를 0이 아닌 값으로 설정해주세요."
+            )
+        
+        # 안전한 계산 수행
+        calculation_result = 100 / divisor
+        
+        return {
+            "message": "PR 테스트용 엔드포인트", 
+            "feature": "새로운 기능 테스트",
+            "status": "success",
+            "calculation": calculation_result,
+            "formula": f"100 ÷ {divisor} = {calculation_result}",
+            "note": "ZeroDivisionError 버그가 수정되었습니다! 🎉"
+        }
+        
+    except HTTPException:
+        # HTTP 예외는 그대로 전달
+        raise
+    except Exception as e:
+        # 예상하지 못한 예외 처리
+        raise HTTPException(
+            status_code=500, 
+            detail=f"서버 내부 오류가 발생했습니다: {str(e)}"
+        )
 
 # 애플리케이션 시작 시 실행
 @app.on_event("startup")
@@ -87,4 +110,4 @@ if __name__ == "__main__":
         port=8000,
         reload=True,
         log_level="info"
-    ) 
+    )
