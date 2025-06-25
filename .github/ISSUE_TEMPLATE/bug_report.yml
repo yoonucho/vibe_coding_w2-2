@@ -1,0 +1,106 @@
+name: 🐛 버그 리포트
+description: 버그나 문제를 신고해주세요
+title: "[BUG] "
+labels: ["bug", "priority:medium"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        버그 리포트를 작성해주셔서 감사합니다! 빠른 해결을 위해 아래 정보를 최대한 자세히 작성해주세요.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 🐛 버그 설명
+      description: 발생한 버그에 대해 명확하고 간결하게 설명해주세요.
+      placeholder: 어떤 문제가 발생했나요?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 🔄 재현 단계
+      description: 버그를 재현할 수 있는 단계를 순서대로 작성해주세요.
+      placeholder: |
+        1. '...' 페이지로 이동
+        2. '...' 버튼 클릭
+        3. '...' 입력
+        4. 오류 확인
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: ✅ 예상된 동작
+      description: 정상적으로 작동해야 하는 방식을 설명해주세요.
+      placeholder: 어떻게 동작해야 하나요?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: ❌ 실제 동작
+      description: 실제로 어떻게 동작하는지 설명해주세요.
+      placeholder: 실제로는 어떻게 동작하나요?
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 🌍 환경 정보
+      description: 버그가 발생한 환경 정보를 입력해주세요.
+      placeholder: |
+        - OS: (예: macOS 12.6, Windows 11, Ubuntu 20.04)
+        - 브라우저: (예: Chrome 108, Firefox 107, Safari 16)
+        - Python 버전: (예: 3.11.0)
+        - 기타 관련 정보:
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📋 에러 로그
+      description: 관련된 에러 메시지나 로그를 복사해서 붙여넣어주세요.
+      placeholder: |
+        에러 메시지나 콘솔 로그를 여기에 붙여넣어주세요.
+
+        ```
+        에러 로그 내용
+        ```
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 📸 스크린샷
+      description: 문제 상황을 보여주는 스크린샷이 있다면 첨부해주세요.
+      placeholder: 이미지를 드래그하여 첨부하거나 링크를 입력해주세요.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 📝 추가 정보
+      description: 버그와 관련된 추가 정보가 있다면 작성해주세요.
+      placeholder: |
+        - 이 버그가 언제부터 발생했나요?
+        - 특정 조건에서만 발생하나요?
+        - 임시 해결책이 있나요?
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: ✅ 체크리스트
+      description: 아래 항목들을 확인해주세요.
+      options:
+        - label: 이슈 검색을 통해 중복된 버그 리포트가 없는지 확인했습니다.
+          required: true
+        - label: 최신 버전에서도 동일한 문제가 발생하는지 확인했습니다.
+          required: true
+        - label: 재현 단계를 직접 테스트해보았습니다.
+          required: true

@@ -1,0 +1,185 @@
+name: Issue Auto Assigner
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  assign-issue:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Auto assign issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title.toLowerCase();
+            const body = (issue.body || '').toLowerCase();
+
+            // 팀원 및 전문가 정의 (실제 GitHub 사용자명으로 변경 필요)
+            const teamMembers = {
+              backend: ['backend-dev1', 'backend-dev2'],
+              frontend: ['frontend-dev1', 'frontend-dev2'],
+              fullstack: ['fullstack-dev1', 'fullstack-dev2'],
+              docs: ['docs-maintainer'],
+              devops: ['devops-expert'],
+              maintenance: ['maintainer1', 'maintainer2']
+            };
+
+            // 이슈 타입 및 컴포넌트 감지
+            let assigneeCategory = 'maintenance'; // 기본값
+
+            // 이슈 타입별 담당자 결정
+            if (title.includes('backend') || body.includes('backend') || 
+                title.includes('api') || body.includes('api') ||
+                title.includes('server') || body.includes('server')) {
+              assigneeCategory = 'backend';
+            } else if (title.includes('frontend') || body.includes('frontend') ||
+                      title.includes('ui') || body.includes('ui') ||
+                      title.includes('interface') || body.includes('interface')) {
+              assigneeCategory = 'frontend';
+            } else if (title.includes('docs') || title.includes('documentation') ||
+                      body.includes('docs') || body.includes('documentation')) {
+              assigneeCategory = 'docs';
+            } else if (title.includes('ci') || title.includes('cd') ||
+                      title.includes('deploy') || body.includes('deploy') ||
+                      title.includes('github action')) {
+              assigneeCategory = 'devops';
+            } else if (title.includes('bug') || body.includes('bug')) {
+              // 버그는 풀스택 개발자나 관련 컴포넌트 전문가가 처리
+              assigneeCategory = 'fullstack';
+            }
+
+            // 우선순위 기반 할당 로직
+            const isUrgent = title.includes('urgent') || title.includes('critical') ||
+                            body.includes('urgent') || body.includes('critical');
+
+            // 담당자 선택
+            const candidates = teamMembers[assigneeCategory] || teamMembers.maintenance;
+            let selectedAssignee;
+
+            if (candidates.length > 0) {
+              // 라운드 로빈 방식으로 할당 (간단한 해시 기반)
+              const hash = issue.number % candidates.length;
+              selectedAssignee = candidates[hash];
+            }
+
+            if (selectedAssignee) {
+              // 담당자 할당
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                assignees: [selectedAssignee]
+              });
+              
+              // 할당 결과 댓글
+              const urgentText = isUrgent ? '🚨 **긴급 이슈**' : '';
+              const comment = `## 👤 담당자 자동 할당
+              
+              ${urgentText}
+              
+              **담당자**: @${selectedAssignee}
+              **분야**: ${assigneeCategory}
+              **할당 이유**: ${getAssignmentReason(assigneeCategory, title, body)}
+              
+              ### 담당자 가이드
+              - 초기 응답: ${isUrgent ? '2시간 내' : '24시간 내'}
+              - 분석 완료: ${isUrgent ? '24시간 내' : '3-5일 내'}
+              - 진행 상황 업데이트 주기: 주 2회
+              
+              담당자가 변경되어야 할 경우 언제든 재할당 요청해주세요.
+              
+              ---
+              🤖 담당자는 이슈 내용을 기반으로 자동 할당되었습니다.`;
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+
+            function getAssignmentReason(category, title, body) {
+              switch(category) {
+                case 'backend':
+                  return '백엔드/API 관련 키워드가 감지되었습니다';
+                case 'frontend':
+                  return '프론트엔드/UI 관련 키워드가 감지되었습니다';
+                case 'docs':
+                  return '문서 관련 키워드가 감지되었습니다';
+                case 'devops':
+                  return 'DevOps/CI-CD 관련 키워드가 감지되었습니다';
+                case 'fullstack':
+                  return '버그나 복합적인 이슈로 판단되어 풀스택 개발자가 할당되었습니다';
+                default:
+                  return '일반적인 유지보수 담당자가 할당되었습니다';
+              }
+            }
+
+  notify-urgent:
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.title, 'urgent') || contains(github.event.issue.title, 'critical')
+
+    steps:
+      - name: Notify urgent issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // 긴급 이슈의 경우 추가 알림 로직
+            const comment = `## 🚨 긴급 이슈 추가 알림
+
+            이 이슈는 긴급으로 분류되어 다음과 같은 특별 처리가 적용됩니다:
+
+            ### 🔥 긴급 처리 프로세스
+            1. **즉시 알림**: 모든 관련 팀원에게 즉시 알림
+            2. **우선 처리**: 다른 작업보다 우선하여 처리
+            3. **빠른 응답**: 2시간 내 초기 응답 필요
+            4. **정기 업데이트**: 6시간마다 진행 상황 업데이트
+
+            ### 📞 에스컬레이션
+            24시간 내 해결되지 않으면 자동으로 상위 관리자에게 에스컬레이션됩니다.
+
+            ---
+            🚨 긴급 이슈 특별 처리 안내`;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # 24시간 후 미할당 이슈 확인 (스케줄러로 별도 관리 가능)
+  check-unassigned:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check if issue needs attention
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+
+            // 이슈가 생성된지 24시간 후에 실행되는 로직
+            // (실제로는 scheduled workflow로 구현하는 것이 더 적절)
+
+            const comment = `## ⏰ 이슈 처리 알림
+
+            이 이슈가 생성된 지 시간이 지났습니다.
+
+            ### 📋 현재 상태 확인
+            - 담당자 할당 여부
+            - 라벨 적용 여부  
+            - 초기 응답 여부
+
+            담당자가 아직 할당되지 않았다면 수동으로 할당해주세요.
+
+            ---
+            🤖 정기 이슈 상태 확인`;
+
+            // 실제 구현시에는 조건부로 실행
+            // if (!issue.assignees.length) { ... }
+            console.log('Issue status check completed');

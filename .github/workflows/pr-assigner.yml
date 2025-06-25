@@ -1,0 +1,121 @@
+name: PR Auto Assigner
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+jobs:
+  assign-reviewers:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Auto assign reviewers
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // 프로젝트 팀원 목록 (실제 GitHub 사용자명으로 변경 필요)
+            const teamMembers = [
+              'reviewer1',
+              'reviewer2',
+              'reviewer3'
+            ];
+
+            // 코드 영역별 전문가 매핑
+            const codeOwners = {
+              'backend/': ['backend-expert1', 'backend-expert2'],
+              'frontend/': ['frontend-expert1', 'frontend-expert2'],
+              'docs/': ['docs-maintainer'],
+              '.github/': ['devops-expert']
+            };
+
+            const pr = context.payload.pull_request;
+            const author = pr.user.login;
+
+            // PR 작성자를 제외한 팀원 목록
+            const availableReviewers = teamMembers.filter(member => member !== author);
+
+            // 변경된 파일 목록 가져오기
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            // 변경된 파일 경로 기반으로 전문가 찾기
+            let expertReviewers = new Set();
+
+            for (const file of files) {
+              for (const [path, experts] of Object.entries(codeOwners)) {
+                if (file.filename.startsWith(path)) {
+                  experts.forEach(expert => {
+                    if (expert !== author && teamMembers.includes(expert)) {
+                      expertReviewers.add(expert);
+                    }
+                  });
+                }
+              }
+            }
+
+            // 전문가가 없으면 일반 팀원에서 무작위 선택
+            let selectedReviewers = Array.from(expertReviewers);
+
+            if (selectedReviewers.length === 0 && availableReviewers.length > 0) {
+              // 무작위로 1-2명 선택
+              const numReviewers = Math.min(2, availableReviewers.length);
+              selectedReviewers = availableReviewers
+                .sort(() => 0.5 - Math.random())
+                .slice(0, numReviewers);
+            }
+
+            // 최대 3명까지만 할당
+            selectedReviewers = selectedReviewers.slice(0, 3);
+
+            if (selectedReviewers.length > 0) {
+              await github.rest.pulls.requestReviewers({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                reviewers: selectedReviewers
+              });
+              
+              // 할당 결과 댓글
+              const comment = `## 👥 리뷰어 자동 할당
+
+            다음 팀원들이 리뷰어로 할당되었습니다:
+            ${selectedReviewers.map(reviewer => `- @${reviewer}`).join('\n')}
+
+            ${expertReviewers.size > 0 ? 
+              '🎯 변경된 코드 영역의 전문가가 우선 할당되었습니다.' : 
+              '🔄 팀원 순환 할당 시스템에 따라 할당되었습니다.'
+            }
+
+            ---
+            🤖 이 할당은 자동으로 수행되었습니다.`;
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+
+  assign-pr-author:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Assign PR author
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const author = pr.user.login;
+
+            // PR 작성자를 Assignee로 설정
+            await github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              assignees: [author]
+            });

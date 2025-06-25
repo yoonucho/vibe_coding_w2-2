@@ -1,0 +1,184 @@
+name: PR Auto Labeler
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  label-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Auto label PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title.toLowerCase();
+            const body = (pr.body || '').toLowerCase();
+            const labels = [];
+
+            // 변경된 파일 목록 가져오기
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            // 파일 경로 기반 컴포넌트 라벨
+            const pathLabels = {
+              'backend/': 'component:backend',
+              'frontend/': 'component:frontend',
+              'docs/': 'component:docs',
+              '.github/': 'component:ci-cd',
+              'tests/': 'component:tests',
+              'requirements.txt': 'dependencies'
+            };
+
+            // 변경된 파일에 따른 라벨 추가
+            for (const file of files) {
+              for (const [path, label] of Object.entries(pathLabels)) {
+                if (file.filename.includes(path)) {
+                  if (!labels.includes(label)) {
+                    labels.push(label);
+                  }
+                }
+              }
+            }
+
+            // PR 제목/내용 기반 타입 라벨
+            const typePatterns = {
+              'type:feature': ['feat', 'feature', 'add', 'implement', 'new'],
+              'type:bugfix': ['fix', 'bug', 'bugfix', 'resolve', 'patch'],
+              'type:hotfix': ['hotfix', 'urgent', 'critical', 'emergency'],
+              'type:refactor': ['refactor', 'cleanup', 'optimize', 'improve'],
+              'type:docs': ['docs', 'documentation', 'readme', 'comment'],
+              'type:test': ['test', 'testing', 'spec', 'coverage'],
+              'type:chore': ['chore', 'maintenance', 'config', 'setup']
+            };
+
+            for (const [label, patterns] of Object.entries(typePatterns)) {
+              if (patterns.some(pattern => title.includes(pattern) || body.includes(pattern))) {
+                if (!labels.includes(label)) {
+                  labels.push(label);
+                }
+                break; // 첫 번째 매칭되는 타입만 적용
+              }
+            }
+
+            // 파일 변경량에 따른 크기 라벨
+            const totalChanges = files.reduce((sum, file) => sum + file.changes, 0);
+
+            if (totalChanges > 500) {
+              labels.push('size:large');
+            } else if (totalChanges > 100) {
+              labels.push('size:medium');
+            } else {
+              labels.push('size:small');
+            }
+
+            // 우선순위 라벨 (키워드 기반)
+            const priorityPatterns = {
+              'priority:high': ['urgent', 'critical', 'hotfix', 'breaking'],
+              'priority:medium': ['important', 'feature', 'enhancement'],
+              'priority:low': ['minor', 'docs', 'cleanup', 'chore']
+            };
+
+            for (const [label, patterns] of Object.entries(priorityPatterns)) {
+              if (patterns.some(pattern => title.includes(pattern) || body.includes(pattern))) {
+                if (!labels.includes(label)) {
+                  labels.push(label);
+                }
+                break;
+              }
+            }
+
+            // 기본 우선순위 설정
+            if (!labels.some(label => label.startsWith('priority:'))) {
+              labels.push('priority:medium');
+            }
+
+            // 브레이킹 체인지 감지
+            if (title.includes('breaking') || body.includes('breaking change')) {
+              labels.push('breaking-change');
+            }
+
+            // 라벨 적용
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labels
+              });
+              
+              // 라벨링 결과 댓글
+              const comment = `## 🏷️ 자동 라벨링 완료
+
+            다음 라벨이 자동으로 할당되었습니다:
+            ${labels.map(label => `- \`${label}\``).join('\n')}
+
+            ### 라벨링 기준:
+            - **타입**: PR 제목/내용의 키워드 분석
+            - **컴포넌트**: 변경된 파일 경로 기반
+            - **크기**: 총 변경 라인 수 (${totalChanges}줄)
+            - **우선순위**: 키워드 및 변경 범위 분석
+
+            ---
+            🤖 라벨은 PR 내용 변경 시 자동으로 업데이트됩니다.`;
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+
+  create-labels:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create required labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const requiredLabels = [
+              { name: 'type:feature', color: '00ff00', description: 'New feature or enhancement' },
+              { name: 'type:bugfix', color: 'ff0000', description: 'Bug fix' },
+              { name: 'type:hotfix', color: 'ff6600', description: 'Urgent fix' },
+              { name: 'type:refactor', color: '0066ff', description: 'Code refactoring' },
+              { name: 'type:docs', color: '6600ff', description: 'Documentation changes' },
+              { name: 'type:test', color: 'ffff00', description: 'Test related changes' },
+              { name: 'type:chore', color: '999999', description: 'Maintenance tasks' },
+              { name: 'component:backend', color: '009900', description: 'Backend related' },
+              { name: 'component:frontend', color: '0099ff', description: 'Frontend related' },
+              { name: 'component:docs', color: '9900ff', description: 'Documentation related' },
+              { name: 'component:ci-cd', color: 'ff9900', description: 'CI/CD related' },
+              { name: 'component:tests', color: 'ffff99', description: 'Test related' },
+              { name: 'size:small', color: 'c2e0c6', description: 'Small changes' },
+              { name: 'size:medium', color: 'ffd86e', description: 'Medium changes' },
+              { name: 'size:large', color: 'ff6b6b', description: 'Large changes' },
+              { name: 'priority:high', color: 'ff4757', description: 'High priority' },
+              { name: 'priority:medium', color: 'feca57', description: 'Medium priority' },
+              { name: 'priority:low', color: '48dbfb', description: 'Low priority' },
+              { name: 'breaking-change', color: 'ff0000', description: 'Breaking change' },
+              { name: 'dependencies', color: '663399', description: 'Dependency changes' }
+            ];
+
+            for (const label of requiredLabels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+                console.log(`Created label: ${label.name}`);
+              } catch (error) {
+                if (error.status !== 422) { // 422는 이미 존재하는 라벨
+                  console.error(`Failed to create label ${label.name}:`, error);
+                }
+              }
+            }

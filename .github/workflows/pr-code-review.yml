@@ -1,0 +1,211 @@
+name: PR Auto Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Automated Code Review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            // 변경된 파일 목록 가져오기
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            let reviewComments = [];
+            let generalComments = [];
+
+            // 코드 리뷰 체크리스트
+            const checkList = {
+              hasTests: false,
+              hasDocumentation: false,
+              hasBreakingChanges: false,
+              hasSecurityIssues: false,
+              codeComplexity: 'medium',
+              totalChanges: 0
+            };
+
+            // 파일별 분석
+            for (const file of files) {
+              checkList.totalChanges += file.changes;
+              
+              // 테스트 파일 확인
+              if (file.filename.includes('test_') || file.filename.includes('/tests/')) {
+                checkList.hasTests = true;
+              }
+              
+              // 문서 파일 확인  
+              if (file.filename.includes('.md') || file.filename.includes('/docs/')) {
+                checkList.hasDocumentation = true;
+              }
+              
+              // 보안 관련 패턴 확인
+              if (file.patch) {
+                const securityPatterns = [
+                  /password\s*=\s*['"]/i,
+                  /api_key\s*=\s*['"]/i,
+                  /secret\s*=\s*['"]/i,
+                  /token\s*=\s*['"]/i,
+                  /eval\(/i,
+                  /exec\(/i
+                ];
+                
+                for (const pattern of securityPatterns) {
+                  if (pattern.test(file.patch)) {
+                    checkList.hasSecurityIssues = true;
+                    reviewComments.push({
+                      path: file.filename,
+                      body: `⚠️ **보안 주의**: 민감한 정보나 위험한 함수가 감지되었습니다. 코드를 재검토해주세요.`,
+                      line: 1
+                    });
+                    break;
+                  }
+                }
+                
+                // 복잡도 체크 (간단한 휴리스틱)
+                const complexity = (file.patch.match(/if\s*\(/g) || []).length +
+                                 (file.patch.match(/for\s*\(/g) || []).length +
+                                 (file.patch.match(/while\s*\(/g) || []).length +
+                                 (file.patch.match(/def\s+/g) || []).length;
+                
+                if (complexity > 10) {
+                  checkList.codeComplexity = 'high';
+                  reviewComments.push({
+                    path: file.filename,
+                    body: `🔄 **복잡도 높음**: 이 파일의 복잡도가 높습니다. 함수를 더 작은 단위로 분리하는 것을 고려해보세요.`,
+                    line: 1
+                  });
+                }
+              }
+            }
+
+            // 전체적인 리뷰 코멘트 생성
+            let overallReview = `## 🤖 자동 코드 리뷰
+
+            ### 📊 변경사항 분석
+            - **총 변경 파일**: ${files.length}개
+            - **총 변경 라인**: ${checkList.totalChanges}줄
+            - **코드 복잡도**: ${checkList.codeComplexity}
+
+            ### ✅ 체크리스트 결과
+            `;
+
+            overallReview += checkList.hasTests ? 
+              '- ✅ 테스트 파일이 포함되어 있습니다\n' : 
+              '- ❌ 테스트 파일이 없습니다. 테스트 코드 추가를 권장합니다\n';
+              
+            overallReview += checkList.hasDocumentation ? 
+              '- ✅ 문서 업데이트가 포함되어 있습니다\n' : 
+              '- ⚠️ 문서 업데이트를 검토해보세요\n';
+              
+            if (checkList.hasSecurityIssues) {
+              overallReview += '- ⚠️ 보안 검토가 필요한 부분이 있습니다\n';
+            } else {
+              overallReview += '- ✅ 명백한 보안 이슈는 발견되지 않았습니다\n';
+            }
+
+            // 권장사항
+            overallReview += `
+            ### 💡 권장사항
+            `;
+
+            if (!checkList.hasTests) {
+              overallReview += '- 새로운 기능이나 버그 수정에 대한 테스트 케이스를 추가해주세요\n';
+            }
+
+            if (checkList.totalChanges > 500) {
+              overallReview += '- 큰 규모의 변경사항입니다. PR을 더 작은 단위로 분리하는 것을 고려해보세요\n';
+            }
+
+            if (checkList.codeComplexity === 'high') {
+              overallReview += '- 복잡한 로직이 포함되어 있습니다. 코드 리뷰에 충분한 시간을 할애해주세요\n';
+            }
+
+            overallReview += `
+            ### 🔍 수동 리뷰 포인트
+            - API 변경사항이 하위 호환성을 유지하는지 확인
+            - 에러 처리가 적절히 구현되었는지 점검
+            - 성능에 미치는 영향 검토
+            - 보안 취약점 재검토
+
+            ---
+            🤖 이 리뷰는 자동으로 생성되었습니다. 수동 리뷰도 반드시 진행해주세요.`;
+
+            // 전체 리뷰 댓글 등록
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: overallReview
+            });
+
+            // 개별 파일 리뷰 댓글 등록
+            for (const comment of reviewComments) {
+              try {
+                await github.rest.pulls.createReviewComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  path: comment.path,
+                  body: comment.body,
+                  commit_id: pr.head.sha,
+                  line: comment.line
+                });
+              } catch (error) {
+                console.log(`Could not create review comment for ${comment.path}: ${error.message}`);
+              }
+            }
+
+  performance-check:
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.changed_files, 'backend/')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Performance Analysis
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `## ⚡ 성능 분석 알림
+
+            백엔드 코드 변경이 감지되었습니다. 다음 성능 관련 사항들을 검토해주세요:
+
+            ### 🔍 성능 체크포인트
+            - [ ] 데이터베이스 쿼리 최적화 확인
+            - [ ] N+1 쿼리 문제 없는지 점검
+            - [ ] 메모리 사용량 영향 검토
+            - [ ] API 응답 시간 테스트
+            - [ ] 동시성 처리 검토
+            - [ ] 캐싱 전략 적용 확인
+
+            ### 📊 권장 테스트
+            \`\`\`bash
+            # 성능 테스트 실행 예시
+            cd backend
+            python -m pytest tests/performance/ -v
+            \`\`\`
+
+            ---
+            🤖 성능 관련 변경사항이 있을 때 자동으로 알림됩니다.`;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

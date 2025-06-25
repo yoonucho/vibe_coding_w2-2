@@ -1,0 +1,270 @@
+name: Issue Auto Labeler
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  label-issue:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Auto label issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title.toLowerCase();
+            const body = (issue.body || '').toLowerCase();
+            const labels = [];
+
+            // 이슈 타입 라벨링
+            const typePatterns = {
+              'bug': ['bug', 'error', 'issue', 'broken', 'not working', 'fail'],
+              'enhancement': ['enhance', 'improve', 'better', 'optimization', 'performance'],
+              'feature': ['feature', 'add', 'new', 'implement', 'support'],
+              'documentation': ['docs', 'documentation', 'readme', 'guide', 'manual'],
+              'question': ['question', 'ask', 'how to', 'help', 'doubt'],
+              'duplicate': ['duplicate', 'same as', 'already exists'],
+              'invalid': ['invalid', 'spam', 'not relevant'],
+              'wontfix': ['wont fix', 'not applicable', 'rejected']
+            };
+
+            // 타입 라벨 할당
+            for (const [label, patterns] of Object.entries(typePatterns)) {
+              if (patterns.some(pattern => title.includes(pattern) || body.includes(pattern))) {
+                labels.push(label);
+                break; // 첫 번째 매칭되는 타입만 적용
+              }
+            }
+
+            // 우선순위 라벨링
+            const priorityPatterns = {
+              'priority:high': ['urgent', 'critical', 'blocker', 'emergency', 'asap', 'high priority'],
+              'priority:medium': ['important', 'medium', 'soon', 'needed'],
+              'priority:low': ['low', 'minor', 'someday', 'nice to have', 'low priority']
+            };
+
+            for (const [label, patterns] of Object.entries(priorityPatterns)) {
+              if (patterns.some(pattern => title.includes(pattern) || body.includes(pattern))) {
+                labels.push(label);
+                break;
+              }
+            }
+
+            // 기본 우선순위 설정
+            if (!labels.some(label => label.startsWith('priority:'))) {
+              labels.push('priority:medium');
+            }
+
+            // 컴포넌트 라벨링
+            const componentPatterns = {
+              'component:backend': ['backend', 'api', 'server', 'database', 'auth', 'endpoint'],
+              'component:frontend': ['frontend', 'ui', 'interface', 'client', 'browser', 'styling'],
+              'component:docs': ['documentation', 'readme', 'guide', 'tutorial', 'docs'],
+              'component:ci-cd': ['ci', 'cd', 'github action', 'workflow', 'deploy', 'build'],
+              'component:tests': ['test', 'testing', 'pytest', 'unit test', 'coverage']
+            };
+
+            for (const [label, patterns] of Object.entries(componentPatterns)) {
+              if (patterns.some(pattern => title.includes(pattern) || body.includes(pattern))) {
+                labels.push(label);
+              }
+            }
+
+            // 난이도 라벨링
+            const difficultyPatterns = {
+              'good first issue': ['beginner', 'easy', 'simple', 'starter', 'first time'],
+              'help wanted': ['help wanted', 'contributions welcome', 'looking for help'],
+              'expert needed': ['complex', 'advanced', 'expert', 'difficult', 'requires deep knowledge']
+            };
+
+            for (const [label, patterns] of Object.entries(difficultyPatterns)) {
+              if (patterns.some(pattern => title.includes(pattern) || body.includes(pattern))) {
+                labels.push(label);
+              }
+            }
+
+            // 특별 라벨링
+            const specialPatterns = {
+              'security': ['security', 'vulnerability', 'auth', 'permission', 'exploit'],
+              'performance': ['performance', 'slow', 'speed', 'optimization', 'memory', 'cpu'],
+              'accessibility': ['accessibility', 'a11y', 'screen reader', 'keyboard'],
+              'mobile': ['mobile', 'responsive', 'tablet', 'phone'],
+              'breaking-change': ['breaking', 'breaking change', 'api change', 'incompatible']
+            };
+
+            for (const [label, patterns] of Object.entries(specialPatterns)) {
+              if (patterns.some(pattern => title.includes(pattern) || body.includes(pattern))) {
+                labels.push(label);
+              }
+            }
+
+            // 상태 라벨링 (이슈 내용 기반)
+            if (title.includes('blocked') || body.includes('blocked')) {
+              labels.push('blocked');
+            }
+
+            if (title.includes('research') || body.includes('research') || 
+                title.includes('investigate') || body.includes('investigate')) {
+              labels.push('needs-investigation');
+            }
+
+            if (title.includes('feedback') || body.includes('feedback') ||
+                title.includes('opinion') || body.includes('discussion')) {
+              labels.push('needs-feedback');
+            }
+
+            // 라벨 적용
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labels
+              });
+              
+              // 라벨링 결과 댓글
+              const comment = `## 🏷️ 자동 라벨링 완료
+              
+              다음 라벨이 자동으로 할당되었습니다:
+              ${labels.map(label => `- \`${label}\``).join('\n')}
+              
+              ### 라벨링 기준
+              - **타입**: 이슈 제목과 내용의 키워드 분석
+              - **우선순위**: 긴급도 및 중요도 키워드 감지
+              - **컴포넌트**: 관련 시스템 컴포넌트 식별
+              - **특성**: 보안, 성능, 접근성 등 특별 속성
+              
+              ### 📝 라벨 수정
+              라벨이 잘못 할당되었거나 추가가 필요하다면:
+              1. 이슈 우측의 "Labels" 섹션에서 수정
+              2. 댓글로 요청 (담당자가 수정)
+              
+              ---
+              🤖 라벨은 이슈 내용 변경 시 자동으로 업데이트됩니다.`;
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+
+  create-issue-labels:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create required issue labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const requiredLabels = [
+              // 기본 타입
+              { name: 'bug', color: 'ff0000', description: 'Something isn\'t working' },
+              { name: 'enhancement', color: 'a2eeef', description: 'New feature or request' },
+              { name: 'feature', color: '00ff00', description: 'New feature' },
+              { name: 'documentation', color: '0075ca', description: 'Improvements or additions to documentation' },
+              { name: 'question', color: 'd876e3', description: 'Further information is requested' },
+              { name: 'duplicate', color: 'cfd3d7', description: 'This issue or pull request already exists' },
+              { name: 'invalid', color: 'e4e669', description: 'This doesn\'t seem right' },
+              { name: 'wontfix', color: 'ffffff', description: 'This will not be worked on' },
+              
+              // 우선순위
+              { name: 'priority:high', color: 'ff4757', description: 'High priority' },
+              { name: 'priority:medium', color: 'feca57', description: 'Medium priority' },
+              { name: 'priority:low', color: '48dbfb', description: 'Low priority' },
+              
+              // 컴포넌트
+              { name: 'component:backend', color: '009900', description: 'Backend related' },
+              { name: 'component:frontend', color: '0099ff', description: 'Frontend related' },
+              { name: 'component:docs', color: '9900ff', description: 'Documentation related' },
+              { name: 'component:ci-cd', color: 'ff9900', description: 'CI/CD related' },
+              { name: 'component:tests', color: 'ffff99', description: 'Test related' },
+              
+              // 난이도/기여
+              { name: 'good first issue', color: '7057ff', description: 'Good for newcomers' },
+              { name: 'help wanted', color: '008672', description: 'Extra attention is needed' },
+              { name: 'expert needed', color: 'ff6b6b', description: 'Requires expert knowledge' },
+              
+              // 특별 분류
+              { name: 'security', color: 'ff0000', description: 'Security related' },
+              { name: 'performance', color: 'ff6600', description: 'Performance related' },
+              { name: 'accessibility', color: '663399', description: 'Accessibility improvements' },
+              { name: 'mobile', color: '33cc33', description: 'Mobile related' },
+              { name: 'breaking-change', color: 'ff0000', description: 'Breaking change' },
+              
+              // 상태
+              { name: 'blocked', color: 'ff0000', description: 'Blocked by other issues' },
+              { name: 'needs-investigation', color: 'ffcc00', description: 'Requires investigation' },
+              { name: 'needs-feedback', color: 'cc00ff', description: 'Needs community feedback' }
+            ];
+
+            for (const label of requiredLabels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+                console.log(`Created label: ${label.name}`);
+              } catch (error) {
+                if (error.status !== 422) { // 422는 이미 존재하는 라벨
+                  console.error(`Failed to create label ${label.name}:`, error);
+                }
+              }
+            }
+
+  milestone-assignment:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Auto assign milestone
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title.toLowerCase();
+            const body = (issue.body || '').toLowerCase();
+
+            // 마일스톤 자동 할당 로직
+            let targetMilestone = null;
+
+            // 우선순위 기반 마일스톤 할당
+            if (title.includes('urgent') || title.includes('critical')) {
+              targetMilestone = 'Current Sprint';
+            } else if (title.includes('feature') || body.includes('feature')) {
+              targetMilestone = 'Next Release';
+            } else if (title.includes('docs') || title.includes('documentation')) {
+              targetMilestone = 'Documentation';
+            } else if (title.includes('bug')) {
+              targetMilestone = 'Bug Fixes';
+            }
+
+            if (targetMilestone) {
+              try {
+                // 마일스톤 목록 가져오기
+                const { data: milestones } = await github.rest.issues.listMilestones({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo
+                });
+                
+                const milestone = milestones.find(m => m.title === targetMilestone);
+                
+                if (milestone) {
+                  await github.rest.issues.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.issue.number,
+                    milestone: milestone.number
+                  });
+                  
+                  console.log(`Assigned milestone: ${targetMilestone}`);
+                }
+              } catch (error) {
+                console.log(`Could not assign milestone: ${error.message}`);
+              }
+            }

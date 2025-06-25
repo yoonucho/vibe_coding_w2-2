@@ -1,0 +1,41 @@
+# 코드 소유자 정의
+# 이 파일은 GitHub에서 PR 리뷰어를 자동으로 할당하는 데 사용됩니다.
+# 실제 GitHub 사용자명으로 변경해주세요.
+
+# 전체 레포지토리 기본 소유자
+* @maintainer1 @maintainer2
+
+# 백엔드 관련 파일
+/backend/ @backend-expert1 @backend-expert2
+/backend/app/ @backend-expert1
+/backend/tests/ @backend-expert1 @backend-expert2
+
+# 프론트엔드 관련 파일  
+/frontend/ @frontend-expert1 @frontend-expert2
+
+# 문서 관련 파일
+/docs/ @docs-maintainer
+*.md @docs-maintainer
+/README.md @maintainer1 @docs-maintainer
+
+# CI/CD 및 GitHub 설정
+/.github/ @devops-expert @maintainer1
+/.github/workflows/ @devops-expert
+/.github/ISSUE_TEMPLATE/ @maintainer1 @docs-maintainer
+/.github/PULL_REQUEST_TEMPLATE.md @maintainer1 @docs-maintainer
+
+# 설정 파일
+/.gitignore @devops-expert @maintainer1
+/requirements.txt @backend-expert1 @devops-expert
+/backend/requirements.txt @backend-expert1
+/frontend/requirements.txt @frontend-expert1
+
+# 테스트 파일
+/tests/ @backend-expert1 @frontend-expert1
+**/test_*.py @backend-expert1
+**/tests/ @backend-expert1 @frontend-expert1
+
+# 보안 관련 파일
+/backend/app/config.py @backend-expert1 @devops-expert
+**/.env* @devops-expert
+**/config.py @backend-expert1 @devops-expert 
