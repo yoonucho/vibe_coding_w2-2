@@ -14,20 +14,18 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            // 프로젝트 팀원 목록 (실제 GitHub 사용자명으로 변경 필요)
-            const teamMembers = [
-              'reviewer1',
-              'reviewer2',
-              'reviewer3'
-            ];
-
-            // 코드 영역별 전문가 매핑
-            const codeOwners = {
-              'backend/': ['backend-expert1', 'backend-expert2'],
-              'frontend/': ['frontend-expert1', 'frontend-expert2'],
-              'docs/': ['docs-maintainer'],
-              '.github/': ['devops-expert']
-            };
+                      // 프로젝트 팀원 목록
+          const teamMembers = [
+            'yoonucho'
+          ];
+          
+          // 코드 영역별 전문가 매핑
+          const codeOwners = {
+            'backend/': ['yoonucho'],
+            'frontend/': ['yoonucho'],
+            'docs/': ['yoonucho'],
+            '.github/': ['yoonucho']
+          };
 
             const pr = context.payload.pull_request;
             const author = pr.user.login;
